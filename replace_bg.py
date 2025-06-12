@@ -1,55 +1,73 @@
 from PIL import Image
 import requests
 import base64
-import glob
 import os
 import sys
 
-print("请分别输入RBG值，如：222,67,67")
-rbg_r = int(input("R: "))
-rbg_g = int(input("G: "))
-rbg_b = int(input("B: "))
+def get_access_token():
+    """获取百度API access token"""
+    host = 'https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=b5tzPsMmh3Iv0B3qFkAXcgzl&client_secret=AQbiZDu99lIEe1G8nhCnCG8x2Eyhn2V1'
+    try:
+        response = requests.get(host)
+        return response.json()['access_token']
+    except Exception as e:
+        print(f"获取token失败：{str(e)}")
+        return None
 
-# 定义token地址
-host = 'https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=b5tzPsMmh3Iv0B3qFkAXcgzl&client_secret=AQbiZDu99lIEe1G8nhCnCG8x2Eyhn2V1'
-# 请求token
-response = requests.get(host)
-if response:
-    # 提取token
-    access_token = response.json()['access_token']
-    # 获取当前脚本文件名
-    cur_file = os.path.basename(sys.argv[0])
-    # 获取除脚本外的文件列表
-    dir_content = [x for x in os.listdir(".") if x != cur_file]
-    request_url = "https://aip.baidubce.com/rest/2.0/image-classify/v1/body_seg"
-    i = 0
-    for f in dir_content:
-        i = i + 1
-        img = open(f, 'rb')
-        img = base64.b64encode(img.read())
-        # 定义param
-        params = {"image":img,"type":"foreground"}
-        # 拼接人像分割API地址
-        request_url = request_url + "?access_token=" + access_token
-        # 定义header
+def process_image(image_path, rgb_values, access_token):
+    """处理单张图片"""
+    try:
+        with open(image_path, 'rb') as img:
+            img_base64 = base64.b64encode(img.read())
+        
+        request_url = f"https://aip.baidubce.com/rest/2.0/image-classify/v1/body_seg?access_token={access_token}"
         headers = {'content-type': 'application/x-www-form-urlencoded'}
-        print("正在移除第",i,"张背景...")
-        # 请求人像分割接口
+        params = {"image": img_base64, "type": "foreground"}
+        
         response = requests.post(request_url, data=params, headers=headers)
-        if response:
-            # 获取回调的base64值
-            imgdata = base64.b64decode(response.json()['foreground'])
-            # 以原名保存为png文件
-            file = open(f.split(".")[0]+'.png','wb')
-            file.write(imgdata)
-            file.close()
+        if not response.ok:
+            print(f"处理图片 {image_path} 失败")
+            return False
 
-            im = Image.open(f.split(".")[0]+'.png')
-            x,y = im.size 
-            try: 
-                p = Image.new('RGBA', im.size, (rbg_r,rbg_g,rbg_b))
-                p.paste(im, (0, 0, x, y), im)
-                p.save(f.split(".")[0]+'.png')
-            except:
-                pass
-            print('完成！')
+        output_path = f"{os.path.splitext(image_path)[0]}.png"
+        imgdata = base64.b64decode(response.json()['foreground'])
+        
+        with open(output_path, 'wb') as f:
+            f.write(imgdata)
+
+        # 添加背景色
+        im = Image.open(output_path)
+        background = Image.new('RGBA', im.size, rgb_values)
+        background.paste(im, (0, 0), im)
+        background.save(output_path)
+        return True
+    except Exception as e:
+        print(f"处理图片 {image_path} 时发生错误：{str(e)}")
+        return False
+
+def main():
+    print("请分别输入RGB值，如：222,67,67")
+    try:
+        rgb = (
+            int(input("R: ")),
+            int(input("G: ")),
+            int(input("B: "))
+        )
+    except ValueError:
+        print("RGB值必须为0-255的整数！")
+        return
+
+    access_token = get_access_token()
+    if not access_token:
+        return
+
+    cur_file = os.path.basename(sys.argv[0])
+    image_files = [f for f in os.listdir(".") if f != cur_file and f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+
+    for i, image_file in enumerate(image_files, 1):
+        print(f"正在处理第 {i} 张图片：{image_file}...")
+        if process_image(image_file, rgb, access_token):
+            print(f"图片 {image_file} 处理完成！")
+
+if __name__ == "__main__":
+    main()
