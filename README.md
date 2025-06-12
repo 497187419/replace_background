@@ -11,9 +11,8 @@
 
 ## 使用方法
 
-1. 获取程序
-   - 下载`dist/replace_bg.exe`可执行文件
-   - 或者运行Python源代码`replace_bg.py`
+1. 获取程序、
+   - 运行Python源代码`replace_bg.py`
 
 2. 使用步骤
    - 创建一个新文件夹
